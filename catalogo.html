@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Catálogo - AMMYCOSMETIC</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="logo-area">
+        <img class="logo-image" src="assets/images/logo.png" alt="AMMYCOSMETIC" />
+        <div>
+          <h1>AMMYCOSMETIC</h1>
+          <p>Envío a toda Colombia</p>
+        </div>
+      </div>
+      <nav class="main-nav">
+        <a href="index.html">Inicio</a>
+        <a href="catalogo.html">Catálogo</a>
+        <a href="pedido.html">Pedido</a>
+      </nav>
+    </header>
+
+    <main class="catalog-page">
+      <aside class="catalog-filters">
+        <div class="section-header">
+          <h2>Filtrar catálogo</h2>
+          <p>Selecciona una sección o busca tu producto.</p>
+        </div>
+        <div class="filter-card">
+          <label for="searchInput">Buscar</label>
+          <input type="search" id="searchInput" class="search-input" placeholder="Buscar producto..." />
+          <div id="categoryButtons" class="category-list"></div>
+        </div>
+      </aside>
+
+      <section class="catalog-main">
+        <div class="section-header">
+          <h2>Catálogo completo</h2>
+          <p>Elige tus productos favoritos y agrégalos al carrito.</p>
+        </div>
+        <div id="productList"></div>
+      </section>
+
+      <aside class="cart-panel">
+        <div class="cart-card">
+          <div class="section-header">
+            <h2>Tu carrito</h2>
+            <p>Se guardará mientras exploras el catálogo.</p>
+          </div>
+          <div id="cartItems" class="cart-items"></div>
+          <div class="cart-summary">
+            <p>Total:</p>
+            <strong id="cartTotal">$0</strong>
+          </div>
+          <button id="checkoutButton" type="button" class="button">Realizar pedido</button>
+        </div>
+      </aside>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <footer class="site-footer">
+      <p>AMMYCOSMETIC - Envío a toda Colombia</p>
+      <p>© 2026 AMMYCOSMETIC. Todos los derechos reservados.</p>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>

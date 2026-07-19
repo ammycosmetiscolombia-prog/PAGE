@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AMMYCOSMETIC</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="logo-area">
+        <img class="logo-image" src="assets/images/logo.png" alt="Logo AMMYCOSMETIC" />
+        <div>
+          <h1>AMMYCOSMETIC</h1>
+          <p>Envío a toda Colombia</p>
+        </div>
+      </div>
+      <nav class="main-nav">
+        <a href="#home">Inicio</a>
+        <a href="catalogo.html">Catálogo</a>
+        <a href="pedido.html">Pedido</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="home" class="hero">
+        <div class="hero-image">
+          <div class="hero-logo-card">
+            <img src="assets/images/logo.png" alt="Logo AMMYCOSMETIC" class="hero-logo" />
+            <div class="hero-slogan">
+              <span class="eyebrow">Ammy Cosmetic</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-content">
+          <p class="eyebrow">Belleza que inspira</p>
+          <h2>Compra con confianza, recibe con cariño.</h2>
+          <p>Descubre cajas sorpresa y productos seleccionados con dedicación, pago seguro y envíos a toda Colombia.</p>
+          <div class="hero-actions">
+            <a href="catalogo.html" class="button">Ver catálogo</a>
+            <a href="pedido.html" class="button secondary">Ir a pedido</a>
+          </div>
+          <p class="hero-note">Si no sabes qué elegir, Ammy te recomienda opciones según tu estilo y ocasión.</p>
+          <div class="hero-highlights">
+            <div><strong>+100</strong> ventas</div>
+            <div><strong>Pago</strong> seguro</div>
+            <div><strong>Envío</strong> rápido</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="intro-grid">
+        <article class="intro-card">
+          <h3>Cajas sorpresa</h3>
+          <p>Marcas premium con presentación de regalo para que cada pedido sea una sorpresa adorable.</p>
+        </article>
+        <article class="intro-card accent">
+          <h3>Asistente Ammy</h3>
+          <p>Responde rápido inquietudes sobre pagos, envíos, combos y devoluciones con tono cute.</p>
+        </article>
+        <article class="intro-card">
+          <h3>Entrega segura</h3>
+          <p>Despachos protegidos y embalajes suaves, para que tu pedido llegue bonito y sin daños.</p>
+        </article>
+      </section>
+
+      <section class="ai-section">
+        <div class="section-header">
+          <h2>Asistente Ammy</h2>
+          <p>Tu guía virtual con respuestas claras, consejos cute y ayuda en cada paso del pedido.</p>
+        </div>
+        <div class="ai-card">
+          <div class="chat-info">
+            <div>
+              <p class="chat-title">Chat con Ammy</p>
+              <p class="chat-subtitle">Explicaciones organizadas y animadas, con pasos claros para tu compra y respuestas rápidas cuando necesites ayuda.</p>
+            </div>
+          </div>
+          <div class="ai-buttons">
+            <button type="button" class="ai-btn active" data-topic="comprar">Cómo comprar</button>
+            <button type="button" class="ai-btn" data-topic="envio">Envíos</button>
+            <button type="button" class="ai-btn" data-topic="pago">Pagos</button>
+            <button type="button" class="ai-btn" data-topic="cupones">Cupones</button>
+            <button type="button" class="ai-btn" data-topic="promociones">Promos</button>
+            <button type="button" class="ai-btn" data-topic="contacto">Contacto</button>
+          </div>
+          <div id="chatThread" class="chat-thread" aria-live="polite"></div>
+          <form id="aiQuestionForm" class="chat-form">
+            <label for="aiQuestionInput">¿Qué quieres saber hoy?</label>
+            <div class="chat-input-row">
+              <input id="aiQuestionInput" class="chat-input" type="text" placeholder="Escribe tu pregunta aquí..." />
+              <button type="submit" class="button button-pill">Enviar</button>
+            </div>
+          </form>
+          <div class="ia-footer">
+            <a id="whatsappAssist" class="button whatsapp-assist" target="_blank" rel="noopener noreferrer" href="https://wa.me/573206185147?text=Hola%20Ammy,%20quiero%20consulta%20sobre%20mis%20productos">Contactar por WhatsApp</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="promo-section">
+        <div class="promo-card">
+          <div class="live-promo">
+            <a href="https://www.tiktok.com/@ammy_cosmetic6" class="live-promo-icon" aria-label="TikTok Live">
+              <img src="assets/images/tiktok.jpg" alt="TikTok Live" />
+            </a>
+            <div class="live-promo-text">
+              <strong>¡Cada live tiene dinámicas y ofertas especiales!</strong>
+              <p>Participa en nuestro TikTok y encuentra descuentos, sorpresas y regalos en vivo.</p>
+              <a href="https://www.tiktok.com/@ammy_cosmetic6" target="_blank" rel="noopener noreferrer" class="button button-link">Haz clic y ve al TikTok</a>
+            </div>
+          </div>
+          <h2>Ofertas especiales</h2>
+          <p>Descubre productos económicos, combos de belleza y dinámicas para ganar descuentos.</p>
+          <ul>
+            <li>7 CAPSULAS SORPRESA POR 35K</li>
+            <li>10 CAPSULAS SORPRESA POR 50K</li>
+            <li>15 CAPSULAS SORPRESA POR 80K</li>
+            <li>20 CAPSULAS SORPRESA POR 100K</li>
+            <li>OFERTAS VÁLIDAS SOLO EN LIVE</li>
+          </ul>
+          <a href="catalogo.html" class="button">Ver productos</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-top">
+        <div>
+          <p>AMMYCOSMETIC - Envío a toda Colombia</p>
+          <p>Moda y belleza con entrega segura y atención personalizada.</p>
+        </div>
+        <div class="social-links">
+          <a href="https://www.tiktok.com/@ammy_cosmetic6" class="social-link tiktok" aria-label="TikTok">
+            <img src="assets/images/tiktok.jpg" alt="TikTok" />
+          </a>
+          <a href="https://www.instagram.com/ammycosmetic02?igsh=MTNrOGRlc2g2aHo2cA%3D%3D" target="_blank" class="social-link instagram" aria-label="Instagram">
+            <img src="assets/images/instagram.jpg" alt="Instagram" />
+          </a>
+          <a href="https://www.facebook.com/groups/2249775082449121/" target="_blank" class="social-link facebook" aria-label="Facebook">
+            <img src="assets/images/facebook.jpg" alt="Facebook" />
+          </a>
+        </div>
+      </div>
+      <p>© 2026 AMMYCOSMETIC. Todos los derechos reservados.</p>
+    </footer>
+
+    <!-- Welcome card overlay: shows once per user as an animated card -->
+    <div id="giftOverlay" class="gift-overlay hidden" aria-hidden="true">
+      <div class="gift-center">
+        <div class="welcome-card" id="welcomeCard">
+          <div class="welcome-header">¡Hola! Bienvenida a AMMY</div>
+          <div class="welcome-body">
+            <p>Bienvenida a AMMYCOSMETIC, donde tu belleza llega con cariño.</p>
+            <p class="welcome-note">Explora nuestro catálogo y haz tu pedido cuando estés lista.</p>
+            <div class="welcome-actions">
+              <button id="closeGift" class="button">Empezar</button>
+              <a href="catalogo.html" class="button">Ver productos</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pedido - AMMYCOSMETIC</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="logo-area">
+        <img class="logo-image" src="assets/images/logo.png" alt="Logo AMMYCOSMETIC" />
+        <div>
+          <h1>AMMYCOSMETIC</h1>
+          <p>Envío a toda Colombia</p>
+        </div>
+      </div>
+      <nav class="main-nav">
+        <a href="index.html">Inicio</a>
+        <a href="catalogo.html">Catálogo</a>
+        <a href="pedido.html">Pedido</a>
+      </nav>
+    </header>
+
+    <main class="order-page">
+      <section class="order-section">
+        <div class="section-header">
+          <h2>Realizar pedido</h2>
+          <p>Completa tus datos para enviar la orden.</p>
+        </div>
+        <div class="order-cart-summary">
+          <h3>Resumen del carrito</h3>
+          <div id="cartItems" class="cart-items"></div>
+          <div class="cart-summary">
+            <p>Total:</p>
+            <strong id="cartTotal">$0</strong>
+          </div>
+          <p class="form-help">Los productos que agregues en el catálogo aparecerán aquí.</p>
+        </div>
+        <form id="orderForm" class="order-form">
+          <div class="form-row">
+            <label for="name">Nombre completo</label>
+            <input type="text" id="name" name="name" placeholder="Tu nombre" required />
+          </div>
+          <div class="form-row">
+            <label for="email">Correo electrónico</label>
+            <input type="email" id="email" name="email" placeholder="tucorreo@ejemplo.com" required />
+          </div>
+          <div class="form-row">
+            <label for="phone">Teléfono / WhatsApp</label>
+            <input type="tel" id="phone" name="phone" placeholder="+57 300 000 0000" required />
+          </div>
+          <div class="form-row">
+            <label for="document">CC o TI</label>
+            <input type="text" id="document" name="document" placeholder="Número de cédula o TI" required />
+          </div>
+          <div class="form-row">
+            <label for="address">Dirección</label>
+            <input type="text" id="address" name="address" placeholder="Ciudad / Barrio" required />
+          </div>
+          <div class="form-row">
+            <label for="city">Ciudad</label>
+            <input type="text" id="city" name="city" placeholder="Bogotá, Medellín, Cali..." required />
+          </div>
+          <div class="form-row full-width">
+            <label for="notes">Notas extras</label>
+            <textarea id="notes" name="notes" rows="4" placeholder="Detalles del pedido"></textarea>
+          </div>
+          <button type="submit" class="button">Enviar pedido</button>
+        </form>
+        <p class="form-help">
+          Al enviar el pedido recibirás confirmación por correo y podrás abrir WhatsApp para confirmar el envío.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>AMMYCOSMETIC - Envío a toda Colombia</p>
+      <p>© 2026 AMMYCOSMETIC. Todos los derechos reservados.</p>
+    </footer>
+
+    <div id="toast" class="toast hidden"></div>
+    <div id="orderSuccessModal" class="order-success-overlay hidden" role="dialog" aria-modal="true">
+      <div class="success-modal">
+        <div class="success-badge">
+          <span class="success-check">✓</span>
+        </div>
+        <h2>¡Pedido recibido!</h2>
+        <p>Tu orden se envió con éxito y llegará por correo. Elige qué deseas hacer ahora.</p>
+        <div class="success-modal-buttons">
+          <button id="whatsappButton" type="button" class="success-button">Abrir WhatsApp</button>
+          <button id="emailButton" type="button" class="success-button secondary-button">Volver al inicio</button>
+        </div>
+      </div>
+    </div>
+    <!-- Processing overlay shown while an order is being submitted -->
+    <div id="processingOverlay" class="processing-overlay hidden" aria-hidden="true">
+      <div class="processing-center">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Procesando tu pedido...</p>
+      </div>
+    </div>
+    <script src="script.js"></script>
+  </body>
+</html>
