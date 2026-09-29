@@ -7,27 +7,108 @@ require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const sellerEmail = process.env.SELLER_EMAIL || process.env.MAIL_USER;
-const whatsappNumber = process.env.WHATSAPP_NUMBER || "";
+app.disable("x-powered-by");
+app.use(express.json({ limit: "256kb" }));
+const normalizeEnvValue = (value) => String(value ?? "").trim().replace(/\s+/g, "");
+const mailUser = normalizeEnvValue(process.env.MAIL_USER);
+const mailPass = normalizeEnvValue(process.env.MAIL_PASS);
+const sellerEmail = normalizeEnvValue(process.env.SELLER_EMAIL || mailUser || "");
+const whatsappNumber = normalizeEnvValue(process.env.WHATSAPP_NUMBER || "");
+const resendApiKey = normalizeEnvValue(process.env.RESEND_API_KEY || "");
+const resendFrom = normalizeEnvValue(process.env.RESEND_FROM || "");
+const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS || 90000);
+const mailHost = normalizeEnvValue(process.env.MAIL_HOST || "smtp.gmail.com");
+const isGmailHost = mailHost.toLowerCase().includes("gmail");
+const parsedMailPort = Number(process.env.MAIL_PORT);
+const mailPort = isGmailHost ? 587 : (Number.isFinite(parsedMailPort) ? parsedMailPort : 465);
+const mailSecure = isGmailHost ? false : (process.env.MAIL_SECURE !== undefined ? process.env.MAIL_SECURE === "true" : true);
 
-if (!process.env.MAIL_USER || !process.env.MAIL_PASS) {
-  console.error("Falta configurar MAIL_USER o MAIL_PASS en .env");
-  process.exit(1);
+const mailConfigured = !!mailUser && !!mailPass;
+const emailProvider = normalizeEnvValue(process.env.EMAIL_PROVIDER || "auto").toLowerCase();
+const useResend = emailProvider === "resend" || (emailProvider === "auto" && !mailConfigured && !!resendApiKey);
+const useSmtp = emailProvider === "smtp" || (emailProvider === "auto" && mailConfigured);
+let transporter = null;
+
+function withTimeout(promise, timeoutMs, errorMessage) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
 }
 
-const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST || "smtp.gmail.com",
-  port: process.env.MAIL_PORT ? Number(process.env.MAIL_PORT) : 465,
-  secure: process.env.MAIL_SECURE === "true",
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-});
+async function sendViaResend(messageOptions) {
+  const payload = {
+    from: resendFrom || messageOptions.from || "onboarding@resend.dev",
+    to: Array.isArray(messageOptions.to) ? messageOptions.to : [messageOptions.to],
+    subject: messageOptions.subject,
+    html: messageOptions.html || `<pre>${messageOptions.text || ""}</pre>`,
+    text: messageOptions.text || "",
+  };
+
+  if (messageOptions.cc) {
+    payload.cc = Array.isArray(messageOptions.cc) ? messageOptions.cc : [messageOptions.cc];
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || `Resend error ${response.status}`);
+  }
+
+  return data;
+}
+
+async function sendMailWithLogging(messageOptions) {
+  if (useResend) {
+    if (!resendApiKey) {
+      throw new Error("No está configurada la clave RESEND_API_KEY para enviar por Resend.");
+    }
+    return sendViaResend(messageOptions);
+  }
+
+  if (useSmtp) {
+    if (!transporter) {
+      throw new Error("Transportador SMTP no inicializado.");
+    }
+
+    return withTimeout(
+      transporter.sendMail(messageOptions),
+      SMTP_TIMEOUT_MS,
+      `Tiempo de espera agotado al enviar el correo. Timeout configurado: ${SMTP_TIMEOUT_MS} ms.`
+    );
+  }
+
+  throw new Error("No está configurado ningún proveedor de correo. Usa SMTP o configura RESEND_API_KEY.");
+}
+
+if (mailConfigured) {
+  transporter = nodemailer.createTransport({
+    host: mailHost,
+    port: mailPort,
+    secure: mailSecure,
+    connectionTimeout: SMTP_TIMEOUT_MS,
+    greetingTimeout: SMTP_TIMEOUT_MS,
+    socketTimeout: SMTP_TIMEOUT_MS,
+    auth: {
+      user: mailUser,
+      pass: mailPass,
+    },
+  });
+} else {
+  console.warn("Falta configurar MAIL_USER o MAIL_PASS en las variables de entorno.");
+  console.warn("El servidor arrancará, pero los pedidos no podrán enviarse por correo hasta que se configuren estas variables.");
+}
 
 app.use(cors());
-app.use(express.json());
-app.use(express.static(path.resolve(__dirname)));
+app.use(express.static(path.resolve(__dirname), { maxAge: "1h", etag: true, lastModified: true }));
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -38,7 +119,20 @@ function escapeHtml(value) {
     "'": "&#39;",
   }[ch]));
 }
+function getMailErrorMessage(error) {
+  const message = error && error.message ? error.message : "";
+  const code = error && error.code ? String(error.code) : "";
 
+  if (/invalid login|authentication|535|534|EAUTH/i.test(message) || /EAUTH|535|534/.test(code)) {
+    return "Autenticación SMTP fallida. Revisa el correo y genera una contraseña de aplicación para Gmail si usas esa cuenta.";
+  }
+
+  if (/timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED/i.test(message) || /ETIMEDOUT|ECONNRESET|ECONNREFUSED/.test(code)) {
+    return "No se pudo conectar con el servidor SMTP. Revisa la red, el host y el puerto configurado.";
+  }
+
+  return error && error.message ? error.message : "Error al enviar el pedido";
+}
 function resolveLogoPath() {
   const candidates = [
     path.resolve(__dirname, "assets", "images", "logo.png"),
@@ -146,6 +240,9 @@ function buildOrderHtml({ orderId, orderDate, logoCid, safeName, safeEmail, safe
 }
 
 app.post("/api/order", async (req, res) => {
+  req.setTimeout(120000);
+  res.setTimeout(120000);
+
   const { name, email, phone, document, address, city, notes, cart } = req.body;
 
   if (!name || !email || !phone || !document || !address || !city || !cart || !cart.length) {
@@ -214,16 +311,31 @@ app.post("/api/order", async (req, res) => {
     total,
   });
 
+  if (!useSmtp && !useResend) {
+    return res.status(500).json({ message: "No está configurado ningún proveedor de correo. Configura SMTP o RESEND_API_KEY en las variables de entorno." });
+  }
+
+  if (useSmtp && !mailConfigured) {
+    return res.status(500).json({ message: "No está configurado el correo SMTP. Configura MAIL_USER y MAIL_PASS en las variables de entorno." });
+  }
+
+  if (!sellerEmail) {
+    return res.status(500).json({ message: "No está configurado SELLER_EMAIL. Agrega SELLER_EMAIL en las variables de entorno." });
+  }
+
+  const mailOptions = {
+    from: mailUser,
+    to: sellerEmail,
+    cc: email,
+    subject,
+    text,
+    html,
+    attachments: logoAttachment ? [logoAttachment] : [],
+  };
+
   try {
-    await transporter.sendMail({
-      from: process.env.MAIL_USER,
-      to: sellerEmail,
-      cc: email,
-      subject,
-      text,
-      html,
-      attachments: logoAttachment ? [logoAttachment] : [],
-    });
+    await sendMailWithLogging(mailOptions);
+    console.log(`Pedido enviado correctamente a ${sellerEmail}`);
 
     return res.status(200).json({
       message: "Pedido enviado correctamente",
@@ -233,18 +345,23 @@ app.post("/api/order", async (req, res) => {
     });
   } catch (error) {
     console.error('Error sending mail:', error && error.stack ? error.stack : error);
-    const errMsg = (error && error.message) ? error.message : 'Error al enviar el pedido';
+    const errMsg = getMailErrorMessage(error);
     return res.status(500).json({ message: `Error al enviar el pedido: ${errMsg}` });
   }
 });
 
 app.get('/api/health', async (req, res) => {
-  try {
-    await transporter.verify();
-    return res.json({ ok: true, message: 'SMTP conectado' });
-  } catch (err) {
-    console.error('Health check failed:', err && err.message ? err.message : err);
-    return res.status(500).json({ ok: false, message: err && err.message ? err.message : 'No se pudo conectar al SMTP' });
+  if (!useSmtp && !useResend) {
+    return res.status(500).json({ ok: false, message: 'No está configurado el correo. Configura MAIL_USER y MAIL_PASS o RESEND_API_KEY.' });
+  }
+
+  const provider = useResend ? 'resend' : useSmtp ? 'smtp' : 'none';
+  res.json({ ok: true, message: 'Servidor listo para enviar pedidos', smtpConfigured: !!mailConfigured, provider });
+
+  if (transporter) {
+    transporter.verify().catch((err) => {
+      console.warn('No se pudo validar SMTP en segundo plano:', err && err.message ? err.message : err);
+    });
   }
 });
 
@@ -265,15 +382,19 @@ app.get('/api/logo-debug', (req, res) => {
 });
 
 app.post('/api/test-email', async (req, res) => {
+  if (!mailConfigured && !resendApiKey) {
+    return res.status(500).json({ ok: false, message: 'No está configurado el correo. Configura MAIL_USER y MAIL_PASS o RESEND_API_KEY.' });
+  }
+
   const to = req.body && req.body.to ? req.body.to : sellerEmail;
   const subject = 'Prueba de correo AMMYCOSMETIC';
   const text = 'Este es un correo de prueba para verificar la configuración de correo.';
   try {
-    await transporter.sendMail({ from: process.env.MAIL_USER, to, subject, text });
+    await sendMailWithLogging({ from: mailUser, to, subject, text });
     return res.json({ ok: true, message: 'Correo de prueba enviado' });
   } catch (err) {
     console.error('Error sending test email:', err && err.stack ? err.stack : err);
-    return res.status(500).json({ ok: false, message: err && err.message ? err.message : 'Error al enviar correo de prueba' });
+    return res.status(500).json({ ok: false, message: getMailErrorMessage(err) || 'Error al enviar correo de prueba' });
   }
 });
 
