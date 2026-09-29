@@ -404,6 +404,11 @@ const products = [
 const sellerEmail = "ammycosmetiscolombia@gmail.com";
 const whatsappNumber = "+573206185147"; // número principal usado en la tienda
 
+const productLookup = new Map(products.map((product) => {
+  product._searchText = `${product.name} ${product.description}`.toLowerCase();
+  return [product.id, product];
+}));
+
 const productList = document.getElementById("productList");
 const categoryButtonsContainer = document.getElementById("categoryButtons");
 const searchInput = document.getElementById("searchInput");
@@ -412,12 +417,33 @@ const cartTotalElement = document.getElementById("cartTotal");
 const checkoutButton = document.getElementById("checkoutButton");
 const orderForm = document.getElementById("orderForm");
 const toastBox = document.getElementById("toast");
+const nameInput = document.getElementById("name");
+const emailInput = document.getElementById("email");
+const phoneInput = document.getElementById("phone");
+const documentInput = document.getElementById("document");
+const addressInput = document.getElementById("address");
+const cityInput = document.getElementById("city");
+const notesInput = document.getElementById("notes");
+
+const CATEGORY_LIST = ["Todos", "Cara", "Ojos", "Cuerpo", "Pelo", "Accesorios"];
 
 let currentCategory = "Todos";
 let searchQuery = "";
 let cart = JSON.parse(localStorage.getItem("ammyCart") || "[]");
 let conversationHistory = JSON.parse(localStorage.getItem("ammyChatHistory") || "[]");
+let renderProductsFrame = null;
 const apiBaseUrl = window.location.protocol === "file:" ? "http://localhost:3000" : "";
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 function saveConversationHistory() {
   localStorage.setItem("ammyChatHistory", JSON.stringify(conversationHistory));
@@ -436,20 +462,30 @@ function recordConversation(role, content) {
 function renderConversationHistory() {
   if (!chatThread || conversationHistory.length === 0) return false;
   chatThread.innerHTML = "";
+  const fragment = document.createDocumentFragment();
   conversationHistory.forEach((entry) => {
     const message = document.createElement("div");
     message.className = `chat-message ${entry.role}`;
     const paragraph = document.createElement("p");
     paragraph.textContent = entry.content;
     message.appendChild(paragraph);
-    chatThread.appendChild(message);
+    fragment.appendChild(message);
   });
+  chatThread.appendChild(fragment);
   chatThread.scrollTop = chatThread.scrollHeight;
   return true;
 }
 
 function formatCurrency(amount) {
   return `$${amount.toLocaleString("es-CO")}`;
+}
+
+function debounce(fn, delay = 120) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
 }
 
 function getImagePath(imageName) {
@@ -464,10 +500,7 @@ function getFilteredProducts() {
   const query = searchQuery.trim().toLowerCase();
   return products.filter((product) => {
     const matchesCategory = currentCategory === "Todos" || product.category === currentCategory;
-    const matchesSearch =
-      !query ||
-      product.name.toLowerCase().includes(query) ||
-      product.description.toLowerCase().includes(query);
+    const matchesSearch = !query || product._searchText.includes(query);
     return matchesCategory && matchesSearch;
   });
 }
@@ -475,108 +508,204 @@ function getFilteredProducts() {
 function renderCategoryButtons() {
   if (!categoryButtonsContainer) return;
 
-  const categories = ["Todos", "Cara", "Ojos", "Cuerpo", "Pelo", "Accesorios"];
-  categoryButtonsContainer.innerHTML = categories
-    .map(
-      (category) => `
-        <button type="button" class="category-btn ${currentCategory === category ? "active" : ""}" data-category="${category}">
-          ${category}
-        </button>
-      `
-    )
-    .join("");
+  if (!categoryButtonsContainer.dataset.initialized) {
+    const fragment = document.createDocumentFragment();
+    CATEGORY_LIST.forEach((category) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "category-btn";
+      button.dataset.category = category;
+      button.textContent = category;
+      fragment.appendChild(button);
+    });
+    categoryButtonsContainer.appendChild(fragment);
+
+    categoryButtonsContainer.addEventListener("click", (event) => {
+      const button = event.target.closest(".category-btn");
+      if (!button) return;
+      const targetCategory = button.dataset.category;
+      if (!targetCategory || targetCategory === currentCategory) return;
+      currentCategory = targetCategory;
+      renderCategoryButtons();
+      scheduleProductsRender();
+    });
+
+    categoryButtonsContainer.dataset.initialized = "1";
+  }
 
   categoryButtonsContainer.querySelectorAll(".category-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      currentCategory = button.dataset.category;
-      renderCategoryButtons();
-      renderProducts();
-    });
+    button.classList.toggle("active", button.dataset.category === currentCategory);
   });
+}
+
+function scheduleProductsRender() {
+  if (renderProductsFrame !== null) return;
+  renderProductsFrame = window.requestAnimationFrame(() => {
+    renderProductsFrame = null;
+    renderProducts();
+  });
+}
+
+function createProductCardElement(product, selectedQuantity) {
+  const article = document.createElement("article");
+  article.id = `product-${product.id}`;
+  article.className = `product-card${selectedQuantity > 0 ? " selected" : ""}`;
+
+  if (product.image) {
+    const img = document.createElement("img");
+    img.className = "product-image";
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.src = getImagePath(product.image);
+    img.alt = product.name;
+    article.appendChild(img);
+  }
+
+  const title = document.createElement("h3");
+  title.textContent = product.name;
+  article.appendChild(title);
+
+  const description = document.createElement("p");
+  description.textContent = product.description;
+  article.appendChild(description);
+
+  const price = document.createElement("p");
+  price.className = "price";
+  price.textContent = formatCurrency(product.price);
+  article.appendChild(price);
+
+  const actions = document.createElement("div");
+  actions.className = "product-actions";
+
+  const decreaseBtn = document.createElement("button");
+  decreaseBtn.type = "button";
+  decreaseBtn.className = "quantity-btn";
+  decreaseBtn.dataset.action = "decrease";
+  decreaseBtn.dataset.productId = product.id;
+  decreaseBtn.textContent = "-";
+  actions.appendChild(decreaseBtn);
+
+  const quantityLabel = document.createElement("span");
+  quantityLabel.className = "quantity-label";
+  quantityLabel.textContent = selectedQuantity;
+  actions.appendChild(quantityLabel);
+
+  const increaseBtn = document.createElement("button");
+  increaseBtn.type = "button";
+  increaseBtn.className = "quantity-btn";
+  increaseBtn.dataset.action = "increase";
+  increaseBtn.dataset.productId = product.id;
+  increaseBtn.textContent = "+";
+  actions.appendChild(increaseBtn);
+
+  article.appendChild(actions);
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.dataset.action = "add";
+  addBtn.dataset.productId = product.id;
+  addBtn.textContent = "Agregar al carrito";
+  article.appendChild(addBtn);
+
+  return article;
 }
 
 function renderProducts() {
   if (!productList) return;
 
   const filtered = getFilteredProducts();
+  const cartMap = new Map(cart.map((item) => [item.id, item]));
+  productList.innerHTML = "";
+
   if (filtered.length === 0) {
-    productList.innerHTML = '<p class="empty-state">No hay productos que coincidan con tu búsqueda.</p>';
+    const emptyMessage = document.createElement("p");
+    emptyMessage.className = "empty-state";
+    emptyMessage.textContent = "No hay productos que coincidan con tu búsqueda.";
+    productList.appendChild(emptyMessage);
     return;
   }
 
+  const categories = [];
+  const categoryItems = new Map();
+  filtered.forEach((product) => {
+    const category = product.category;
+    if (!categoryItems.has(category)) {
+      categoryItems.set(category, []);
+      categories.push(category);
+    }
+    categoryItems.get(category).push(product);
+  });
+
+  const buildCategorySection = (category, productsInCategory) => {
+    const section = document.createElement("section");
+    section.className = "category-section";
+
+    const header = document.createElement("div");
+    header.className = "category-header";
+    const title = document.createElement("h3");
+    title.textContent = category;
+    const count = document.createElement("p");
+    count.textContent = `${productsInCategory.length} productos`;
+    header.appendChild(title);
+    header.appendChild(count);
+
+    const grid = document.createElement("div");
+    grid.className = "products-grid category-grid";
+
+    productsInCategory.forEach((product) => {
+      const selectedQuantity = cartMap.get(product.id)?.quantity || 0;
+      grid.appendChild(createProductCardElement(product, selectedQuantity));
+    });
+
+    section.appendChild(header);
+    section.appendChild(grid);
+    return section;
+  };
+
+  const fragment = document.createDocumentFragment();
   if (currentCategory === "Todos") {
-    const categories = [...new Set(filtered.map((p) => p.category))];
-    productList.innerHTML = categories
-      .map((category) => {
-        const productsInCategory = filtered.filter((p) => p.category === category);
-        return `
-          <section class="category-section">
-            <div class="category-header">
-              <h3>${category}</h3>
-              <p>${productsInCategory.length} productos</p>
-            </div>
-            <div class="products-grid category-grid">
-              ${productsInCategory
-                .map(
-                  (product) => `
-                    <article id="product-${product.id}" class="product-card ${cart.find((item) => item.id === product.id)?.quantity>0 ? 'selected' : ''}">
-                      ${product.image ? `<img class="product-image" src="${getImagePath(product.image)}" alt="${product.name}" />` : ""}
-                      <h3>${product.name}</h3>
-                      <p>${product.description}</p>
-                      <p class="price">${formatCurrency(product.price)}</p>
-                      <div class="product-actions">
-                        <button type="button" class="quantity-btn" onclick="decreaseQuantity(${product.id})">-</button>
-                        <span class="quantity-label">${cart.find((item) => item.id === product.id)?.quantity || 0}</span>
-                        <button type="button" class="quantity-btn" onclick="increaseQuantity(${product.id})">+</button>
-                      </div>
-                      <button type="button" onclick="addToCart(${product.id})">Agregar al carrito</button>
-                    </article>
-                  `
-                )
-                .join("")}
-            </div>
-          </section>
-        `;
-      })
-      .join("");
+    categories.forEach((category) => {
+      fragment.appendChild(buildCategorySection(category, categoryItems.get(category)));
+    });
   } else {
-    productList.innerHTML = `
-      <section class="category-section">
-        <div class="category-header">
-          <h3>${currentCategory}</h3>
-          <p>${filtered.length} productos</p>
-        </div>
-        <div class="products-grid category-grid">
-          ${filtered
-            .map(
-              (product) => `
-                <article id="product-${product.id}" class="product-card ${cart.find((item) => item.id === product.id)?.quantity>0 ? 'selected' : ''}">
-                  ${product.image ? `<img class="product-image" src="${getImagePath(product.image)}" alt="${product.name}" />` : ""}
-                  <h3>${product.name}</h3>
-                  <p>${product.description}</p>
-                  <p class="price">${formatCurrency(product.price)}</p>
-                  <div class="product-actions">
-                    <button type="button" class="quantity-btn" onclick="decreaseQuantity(${product.id})">-</button>
-                    <span class="quantity-label">${cart.find((item) => item.id === product.id)?.quantity || 0}</span>
-                    <button type="button" class="quantity-btn" onclick="increaseQuantity(${product.id})">+</button>
-                  </div>
-                  <button type="button" onclick="addToCart(${product.id})">Agregar al carrito</button>
-                </article>
-              `
-            )
-            .join("")}
-        </div>
-      </section>
-    `;
+    fragment.appendChild(buildCategorySection(currentCategory, categoryItems.get(currentCategory) || []));
   }
+
+  productList.appendChild(fragment);
 }
 
 if (searchInput) {
-  searchInput.addEventListener("input", (event) => {
+  searchInput.addEventListener("input", debounce((event) => {
     searchQuery = event.target.value;
-    renderProducts();
-  });
+    scheduleProductsRender();
+  }, 120));
 }
+
+document.body.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+
+  const action = button.dataset.action;
+  const id = Number(button.dataset.productId);
+  if (!id) return;
+
+  switch (action) {
+    case "decrease":
+      decreaseQuantity(id);
+      break;
+    case "increase":
+      increaseQuantity(id);
+      break;
+    case "add":
+      addToCart(id);
+      break;
+    case "remove":
+      removeFromCart(id);
+      break;
+    default:
+      break;
+  }
+});
 
 const aiButtons = document.querySelectorAll(".ai-btn");
 const chatThread = document.getElementById("chatThread");
@@ -808,33 +937,72 @@ if (aiQuestionForm) {
   });
 }
 
+function createCartItemElement(item) {
+  const cartItem = document.createElement("div");
+  cartItem.className = "cart-item";
+
+  const left = document.createElement("div");
+  const name = document.createElement("strong");
+  name.textContent = item.name;
+  const quantityText = document.createElement("p");
+  quantityText.textContent = `${item.quantity} x ${formatCurrency(item.price)}`;
+
+  const quantityControls = document.createElement("div");
+  quantityControls.className = "cart-quantity-controls";
+
+  const decreaseBtn = document.createElement("button");
+  decreaseBtn.type = "button";
+  decreaseBtn.dataset.action = "decrease";
+  decreaseBtn.dataset.productId = item.id;
+  decreaseBtn.textContent = "-";
+
+  const quantityLabel = document.createElement("span");
+  quantityLabel.textContent = item.quantity;
+
+  const increaseBtn = document.createElement("button");
+  increaseBtn.type = "button";
+  increaseBtn.dataset.action = "increase";
+  increaseBtn.dataset.productId = item.id;
+  increaseBtn.textContent = "+";
+
+  quantityControls.appendChild(decreaseBtn);
+  quantityControls.appendChild(quantityLabel);
+  quantityControls.appendChild(increaseBtn);
+
+  left.appendChild(name);
+  left.appendChild(quantityText);
+  left.appendChild(quantityControls);
+
+  const right = document.createElement("div");
+  const itemTotal = document.createElement("strong");
+  itemTotal.textContent = formatCurrency(item.price * item.quantity);
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.dataset.action = "remove";
+  removeBtn.dataset.productId = item.id;
+  removeBtn.textContent = "Eliminar";
+
+  right.appendChild(itemTotal);
+  right.appendChild(removeBtn);
+
+  cartItem.appendChild(left);
+  cartItem.appendChild(right);
+  return cartItem;
+}
+
 function renderCart() {
-  if (cartItemsElement) {
-    if (cart.length === 0) {
-      cartItemsElement.innerHTML = "<p class=\"empty-cart\">Tu carrito está vacío.</p>";
-    } else {
-      cartItemsElement.innerHTML = cart
-        .map(
-          (item) => `
-          <div class="cart-item">
-            <div>
-              <strong>${item.name}</strong>
-              <p>${item.quantity} x ${formatCurrency(item.price)}</p>
-              <div class="cart-quantity-controls">
-                <button type="button" onclick="decreaseQuantity(${item.id})">-</button>
-                <span>${item.quantity}</span>
-                <button type="button" onclick="increaseQuantity(${item.id})">+</button>
-              </div>
-            </div>
-            <div>
-              <strong>${formatCurrency(item.price * item.quantity)}</strong>
-              <button type="button" onclick="removeFromCart(${item.id})">Eliminar</button>
-            </div>
-          </div>
-        `
-        )
-        .join("");
-    }
+  if (!cartItemsElement) return;
+
+  cartItemsElement.innerHTML = "";
+  if (cart.length === 0) {
+    const emptyText = document.createElement("p");
+    emptyText.className = "empty-cart";
+    emptyText.textContent = "Tu carrito está vacío.";
+    cartItemsElement.appendChild(emptyText);
+  } else {
+    const fragment = document.createDocumentFragment();
+    cart.forEach((item) => fragment.appendChild(createCartItemElement(item)));
+    cartItemsElement.appendChild(fragment);
   }
 
   if (cartTotalElement) {
@@ -846,6 +1014,19 @@ function renderCart() {
     checkoutButton.disabled = cart.length === 0;
     checkoutButton.textContent = cart.length === 0 ? "Agrega productos antes" : "Realizar pedido";
   }
+}
+
+function updateProductCard(productId) {
+  const card = document.getElementById(`product-${productId}`);
+  if (!card) return;
+
+  const selectedQuantity = cart.find((item) => item.id === productId)?.quantity || 0;
+  const label = card.querySelector(".quantity-label");
+
+  if (label) {
+    label.textContent = selectedQuantity;
+  }
+  card.classList.toggle("selected", selectedQuantity > 0);
 }
 
 function showToast(message) {
@@ -881,7 +1062,7 @@ function showOrderSuccessModal(whatsappUrl) {
 }
 
 function addToCart(productId) {
-  const product = products.find((item) => item.id === productId);
+  const product = productLookup.get(productId);
   if (!product) return;
 
   const existing = cart.find((item) => item.id === productId);
@@ -892,7 +1073,7 @@ function addToCart(productId) {
   }
   saveCart();
   renderCart();
-  renderProducts();
+  updateProductCard(productId);
   showToast("Producto agregado al carrito");
 }
 
@@ -900,7 +1081,7 @@ function removeFromCart(productId) {
   cart = cart.filter((item) => item.id !== productId);
   saveCart();
   renderCart();
-  renderProducts();
+  updateProductCard(productId);
 }
 
 function increaseQuantity(productId) {
@@ -917,7 +1098,7 @@ function decreaseQuantity(productId) {
   }
   saveCart();
   renderCart();
-  renderProducts();
+  updateProductCard(productId);
 }
 
 // IA: el comportamiento se implementa en la parte superior del archivo para evitar duplicados.
@@ -936,7 +1117,7 @@ function clearCart() {
   cart = [];
   saveCart();
   renderCart();
-  renderProducts();
+  scheduleProductsRender();
 }
 
 function buildOrderSummary(formData) {
@@ -969,90 +1150,77 @@ if (orderForm) {
   orderForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-  if (cart.length === 0) {
-    alert("Agrega al menos un producto al carrito antes de realizar el pedido.");
-    return;
-  }
-
-  const formData = {
-    name: document.getElementById("name").value.trim(),
-    email: document.getElementById("email").value.trim(),
-    phone: document.getElementById("phone").value.trim(),
-    document: document.getElementById("document").value.trim(),
-    address: document.getElementById("address").value.trim(),
-    city: document.getElementById("city").value.trim(),
-    notes: document.getElementById("notes").value.trim() || "Ninguna",
-  };
-
-  if (!formData.name || !formData.email || !formData.phone || !formData.document || !formData.address || !formData.city) {
-    alert("Por favor completa todos los datos obligatorios.");
-    return;
-  }
-
-  try {
-    // show processing overlay if present
-    try { showProcessingOverlay(); } catch (e) {}
-    // save order summary for fallback actions
-    try { saveLastOrderSummary(formData); } catch (e) {}
-
-    // before posting, check backend health to ensure SMTP is reachable
-    try {
-      const healthResp = await fetch(`${apiBaseUrl}/api/health`, { method: 'GET' });
-      if (!healthResp.ok) {
-        const errorBody = await healthResp.json().catch(()=>({}));
-        const msg = errorBody && errorBody.message ? errorBody.message : 'Servidor no disponible';
-        try { hideProcessingOverlay(); } catch (e) {}
-        showToast('El servidor de envíos no está listo: ' + msg);
-        return;
-      }
-    } catch (e) {
-      try { hideProcessingOverlay(); } catch (ee) {}
-      showToast('No se pudo contactar al servidor de envíos. Asegúrate de ejecutar el servidor en http://localhost:3000');
+    if (cart.length === 0) {
+      alert("Agrega al menos un producto al carrito antes de realizar el pedido.");
       return;
     }
 
-    const response = await fetch(`${apiBaseUrl}/api/order`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        document: formData.document,
-        address: formData.address,
-        city: formData.city,
-        notes: formData.notes,
-        cart,
-      }),
-    });
+    const formData = {
+      name: nameInput?.value.trim(),
+      email: emailInput?.value.trim(),
+      phone: phoneInput?.value.trim(),
+      document: documentInput?.value.trim(),
+      address: addressInput?.value.trim(),
+      city: cityInput?.value.trim(),
+      notes: notesInput?.value.trim() || "Ninguna",
+    };
 
-    if (!response.ok) {
-      try { hideProcessingOverlay(); } catch (e) {}
-      const errorData = await response.json().catch(() => ({}));
-      const errMsg = errorData.message || 'Error en el servidor al enviar el pedido.';
-      showToast(errMsg + ' Revisa configuración del servidor.');
+    if (!formData.name || !formData.email || !formData.phone || !formData.document || !formData.address || !formData.city) {
+      alert("Por favor completa todos los datos obligatorios.");
+      return;
+    }
+
+    try {
+      // show processing overlay if present
+      try { showProcessingOverlay(); } catch (e) {}
+      // save order summary for fallback actions
+      try { saveLastOrderSummary(formData); } catch (e) {}
+
+      let response;
+      try {
+        response = await fetchWithTimeout(`${apiBaseUrl}/api/order`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            document: formData.document,
+            address: formData.address,
+            city: formData.city,
+            notes: formData.notes,
+            cart,
+          }),
+        }, 90000);
+      } catch (e) {
+        const msg = e.name === "AbortError"
+          ? "El servidor tardó demasiado al procesar el pedido."
+          : "No se pudo completar el envío del pedido.";
+        throw new Error(msg);
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errMsg = errorData.message || "Error en el servidor al enviar el pedido.";
+        throw new Error(errMsg + " Revisa configuración del servidor.");
+      }
+
+      const data = await response.json();
+      showOrderSuccessModal(data.whatsappUrl);
+    } catch (error) {
+      console.error(error);
+      const message = error && error.message ? error.message : "No se pudo completar el pedido.";
+      showToast(message);
       // fallback: open WhatsApp with order summary so the seller can receive the pedido
       const phone = stripDigits(whatsappNumber) || "573206185147";
       const summary = buildOrderSummary(formData);
       const waUrl = `https://wa.me/${phone}?text=${summary}`;
       showOrderSuccessModal(waUrl);
-      return;
+    } finally {
+      try { hideProcessingOverlay(); } catch (e) {}
     }
-
-    const data = await response.json();
-    try { hideProcessingOverlay(); } catch (e) {}
-    showOrderSuccessModal(data.whatsappUrl);
-  } catch (error) {
-    console.error(error);
-    try { hideProcessingOverlay(); } catch (e) {}
-    // if network error, fallback to WhatsApp summary so the order can be sent manually
-    const phone = stripDigits(whatsappNumber) || "573206185147";
-    const summary = buildOrderSummary(formData);
-    const waUrl = `https://wa.me/${phone}?text=${summary}`;
-    showOrderSuccessModal(waUrl);
-  }
   });
 }
 
@@ -1100,7 +1268,7 @@ function initGiftOverlay() {
 }
 
 // create simple confetti particles
-function createConfetti(count = 24) {
+function createConfetti(count = 16) {
   const overlay = document.getElementById('giftOverlay');
   if (!overlay) return;
   const colors = ['#ff6aa6','#ffd46a','#6af0d6','#ffd0ec','#b98cff'];
